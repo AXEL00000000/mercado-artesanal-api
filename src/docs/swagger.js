@@ -21,7 +21,7 @@ const opciones = {
         Error: {
           type: "object",
           properties: {
-            error: { type: "string", example: "Producto no encontrado" },
+            error: { type: "string", example: "Mensaje del error" },
           },
         },
       },
