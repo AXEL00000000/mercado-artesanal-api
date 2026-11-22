@@ -1,16 +1,11 @@
+// Punto de entrada: carga variables de entorno y levanta el servidor.
 require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok" });
-});
+const app = require("./app");
 
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
   console.log(`API en http://localhost:${PORT}`);
+  console.log(`Documentación en http://localhost:${PORT}/api/docs`);
 });
