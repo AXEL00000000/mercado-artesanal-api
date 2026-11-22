@@ -1,5 +1,10 @@
 // Conexión a PostgreSQL (Supabase) con un pool de conexiones.
-const { Pool } = require("pg");
+const { Pool, types } = require("pg");
+
+// pg devuelve BIGINT (ids) y NUMERIC (precios) como texto para no perder precisión.
+// Nuestros ids y precios caben de sobra en un número de JavaScript, así que se convierten.
+types.setTypeParser(20, (valor) => parseInt(valor, 10));  // BIGINT
+types.setTypeParser(1700, (valor) => parseFloat(valor));  // NUMERIC
 
 if (!process.env.DATABASE_URL) {
   throw new Error("Falta DATABASE_URL en el archivo .env");
