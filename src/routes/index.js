@@ -13,5 +13,6 @@ router.use("/", require("./consultas.routes"));
 router.use("/", require("./entregas.routes"));
 router.use("/", require("./pedidos.routes"));
 router.use("/mi-taller", require("./mi-taller.routes"));
+router.use("/admin", require("./admin.routes"));
 
 module.exports = router;

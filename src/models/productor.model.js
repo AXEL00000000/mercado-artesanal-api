@@ -108,4 +108,29 @@ const actualizar = async (id, cambios) => {
   await query(`UPDATE productor SET ${sets.join(", ")} WHERE id = $1`, [id, ...columnas.map((c) => cambios[c])]);
 };
 
-module.exports = { listar, buscarPorId, buscarPorUsuario, buscarTallerPorId, crear, actualizar };
+// Talleres en cualquier estado, con datos de contacto del artesano
+const listarParaAdmin = async (estado) => {
+  const { rows } = await query(
+    `SELECT ${CAMPOS_TALLER},
+            u.nombre AS artesano, u.email, u.telefono,
+            (SELECT COUNT(*)::int FROM producto p WHERE p.productor_id = pr.id) AS total_productos
+       FROM productor pr
+       JOIN comunidad c ON c.id = pr.comunidad_id
+       JOIN usuario u ON u.id = pr.usuario_id
+      WHERE ($1::text IS NULL OR pr.estado_verificacion = $1)
+      ORDER BY pr.created_at, pr.id`,
+    [estado || null]
+  );
+  return rows.map((f) => ({
+    ...aTaller(f),
+    artesano: { id: f.usuario_id, nombre: f.artesano, email: f.email, telefono: f.telefono },
+    total_productos: f.total_productos,
+  }));
+};
+
+const cambiarEstado = (id, estado) =>
+  query("UPDATE productor SET estado_verificacion = $2 WHERE id = $1", [id, estado]);
+
+module.exports = {
+  listar, buscarPorId, buscarPorUsuario, buscarTallerPorId, crear, actualizar, listarParaAdmin, cambiarEstado,
+};

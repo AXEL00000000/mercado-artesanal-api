@@ -41,4 +41,43 @@ const listarRegiones = async () => {
   return rows;
 };
 
-module.exports = { listar, buscarPorId, listarRegiones };
+const CAMPOS = "id, nombre, municipio, distrito, region";
+
+const crear = async ({ nombre, municipio, distrito, region }) => {
+  const { rows } = await query(
+    `INSERT INTO comunidad (nombre, municipio, distrito, region) VALUES ($1, $2, $3, $4) RETURNING ${CAMPOS}`,
+    [nombre, municipio, distrito ?? null, region]
+  );
+  return rows[0];
+};
+
+const actualizar = async (id, cambios) => {
+  const columnas = ["nombre", "municipio", "distrito", "region"].filter((c) => cambios[c] !== undefined);
+  const sets = columnas.map((c, i) => `${c} = $${i + 2}`);
+  const { rows } = await query(
+    `UPDATE comunidad SET ${sets.join(", ")} WHERE id = $1 RETURNING ${CAMPOS}`,
+    [id, ...columnas.map((c) => cambios[c])]
+  );
+  return rows[0];
+};
+
+const buscarDuplicada = async ({ nombre, municipio }, excluirId) => {
+  const { rows } = await query(
+    `SELECT id FROM comunidad
+      WHERE lower(nombre) = lower($1) AND lower(municipio) = lower($2) AND ($3::bigint IS NULL OR id <> $3)`,
+    [nombre, municipio, excluirId || null]
+  );
+  return rows[0] || null;
+};
+
+// Talleres de cualquier estado que pertenecen a la comunidad
+const contarProductores = async (id) => {
+  const { rows } = await query("SELECT COUNT(*)::int AS total FROM productor WHERE comunidad_id = $1", [id]);
+  return rows[0].total;
+};
+
+const eliminar = (id) => query("DELETE FROM comunidad WHERE id = $1", [id]);
+
+module.exports = {
+  listar, buscarPorId, listarRegiones, crear, actualizar, buscarDuplicada, contarProductores, eliminar,
+};

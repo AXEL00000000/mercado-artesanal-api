@@ -9,4 +9,17 @@ const obtener = async (req, res) => {
   res.json(await categoriaService.obtener(req.params.slug));
 };
 
-module.exports = { listar, obtener };
+const crear = async (req, res) => {
+  res.status(201).json(await categoriaService.crear(req.body || {}));
+};
+
+const actualizar = async (req, res) => {
+  res.json(await categoriaService.actualizar(req.params.slug, req.body || {}));
+};
+
+const eliminar = async (req, res) => {
+  await categoriaService.eliminar(req.params.slug);
+  res.status(204).end();
+};
+
+module.exports = { listar, obtener, crear, actualizar, eliminar };
