@@ -1,6 +1,8 @@
 // Manejo central de errores. Express 5 manda aquí también los errores
 // de funciones async, así que los controladores no necesitan try/catch.
 
+const HttpError = require("../utils/HttpError");
+
 // Errores de PostgreSQL que vienen de las reglas del esquema (db/schema.sql)
 const ERRORES_PG = {
   "23505": { status: 409, mensaje: "Ya existe un registro con ese valor" },          // UNIQUE
@@ -27,10 +29,11 @@ const manejarErrores = (err, req, res, next) => {
   }
 
   const status = err.status || 500;
-  if (status >= 500) console.error(err);
+  const esPropio = err instanceof HttpError;
+  if (status >= 500 && !esPropio) console.error(err);
 
   res.status(status).json({
-    error: status >= 500 ? "Error interno del servidor" : err.message,
+    error: status >= 500 && !esPropio ? "Error interno del servidor" : err.message,
     ...(err.detalles && { detalles: err.detalles }),
   });
 };
