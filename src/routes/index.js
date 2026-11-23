@@ -3,9 +3,10 @@ const { Router } = require("express");
 
 const router = Router();
 
-router.use("/auth", require("./auth.routes"));
 router.use("/health", require("./health.routes"));
 router.use("/categorias", require("./categorias.routes"));
 router.use("/comunidades", require("./comunidades.routes"));
+router.use("/productos", require("./productos.routes"));
+router.use("/productores", require("./productores.routes"));
 
 module.exports = router;
