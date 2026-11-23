@@ -10,6 +10,7 @@ router.use("/auth", require("./auth.routes"));
 router.use("/productos", require("./productos.routes"));
 router.use("/productores", require("./productores.routes"));
 router.use("/", require("./consultas.routes"));
+router.use("/", require("./entregas.routes"));
 router.use("/mi-taller", require("./mi-taller.routes"));
 
 module.exports = router;

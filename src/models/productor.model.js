@@ -75,6 +75,18 @@ const buscarPorUsuario = async (usuarioId) => {
   return rows[0] ? aTaller(rows[0]) : null;
 };
 
+// Taller por id, en cualquier estado de verificación
+const buscarTallerPorId = async (id) => {
+  const { rows } = await query(
+    `SELECT ${CAMPOS_TALLER}
+       FROM productor pr
+       JOIN comunidad c ON c.id = pr.comunidad_id
+      WHERE pr.id = $1`,
+    [id]
+  );
+  return rows[0] ? aTaller(rows[0]) : null;
+};
+
 const crear = async (usuarioId, d) => {
   const { rows } = await query(
     `INSERT INTO productor (usuario_id, comunidad_id, nombre_taller, biografia, foto_url,
@@ -96,4 +108,4 @@ const actualizar = async (id, cambios) => {
   await query(`UPDATE productor SET ${sets.join(", ")} WHERE id = $1`, [id, ...columnas.map((c) => cambios[c])]);
 };
 
-module.exports = { listar, buscarPorId, buscarPorUsuario, crear, actualizar };
+module.exports = { listar, buscarPorId, buscarPorUsuario, buscarTallerPorId, crear, actualizar };
