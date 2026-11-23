@@ -199,4 +199,18 @@ const actualizar = async (id, cambios) => {
   );
 };
 
-module.exports = { listar, buscarPorSlug, listarDeProductor, buscarDeProductor, slugsSimilares, crear, actualizar };
+// Productos activos de talleres aprobados, por id
+const buscarPublicosPorIds = async (ids) => {
+  const { rows } = await query(
+    `SELECT p.id, p.nombre, p.slug, p.modo_venta, p.precio, p.stock,
+            p.peso_g, p.alto_cm, p.ancho_cm, p.largo_cm,
+            pr.id AS productor_id, pr.nombre_taller, pr.whatsapp
+       FROM producto p
+       JOIN productor pr ON pr.id = p.productor_id
+      WHERE p.id = ANY($1::bigint[]) AND p.activo AND pr.estado_verificacion = 'aprobado'`,
+    [ids]
+  );
+  return rows;
+};
+
+module.exports = { listar, buscarPorSlug, buscarPublicosPorIds, listarDeProductor, buscarDeProductor, slugsSimilares, crear, actualizar };

@@ -17,6 +17,20 @@ const autenticar = (req, res, next) => {
   }
 };
 
+// Si llega un token válido deja el usuario en req.usuario; si no, sigue sin usuario.
+const autenticarOpcional = (req, res, next) => {
+  const [tipo, token] = (req.headers.authorization || "").split(" ");
+  if (tipo === "Bearer" && token) {
+    try {
+      const datos = jwt.verify(token, process.env.JWT_SECRET);
+      req.usuario = { id: datos.sub, rol: datos.rol };
+    } catch {
+      req.usuario = undefined;
+    }
+  }
+  next();
+};
+
 // Solo deja pasar a los roles indicados. Va después de autenticar.
 const permitirRoles = (...roles) => (req, res, next) => {
   if (!roles.includes(req.usuario.rol)) {
@@ -25,4 +39,4 @@ const permitirRoles = (...roles) => (req, res, next) => {
   next();
 };
 
-module.exports = { autenticar, permitirRoles };
+module.exports = { autenticar, autenticarOpcional, permitirRoles };
