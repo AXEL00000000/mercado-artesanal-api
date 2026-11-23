@@ -111,4 +111,92 @@ const buscarPorSlug = async (slug) => {
   };
 };
 
-module.exports = { listar, buscarPorSlug };
+const CAMPOS_PROPIOS = `
+  p.id, p.nombre, p.slug, p.descripcion, p.modo_venta, p.precio, p.stock,
+  p.material, p.tecnica, p.peso_g, p.alto_cm, p.ancho_cm, p.largo_cm,
+  p.activo, p.created_at, p.updated_at,
+  cat.id AS categoria_id, cat.slug AS categoria_slug, cat.nombre AS categoria_nombre`;
+
+const aProductoPropio = (f) => ({
+  id: f.id,
+  nombre: f.nombre,
+  slug: f.slug,
+  descripcion: f.descripcion,
+  modo_venta: f.modo_venta,
+  precio: f.precio,
+  stock: f.stock,
+  material: f.material,
+  tecnica: f.tecnica,
+  peso_g: f.peso_g,
+  medidas_cm: { alto: f.alto_cm, ancho: f.ancho_cm, largo: f.largo_cm },
+  activo: f.activo,
+  categoria: { id: f.categoria_id, slug: f.categoria_slug, nombre: f.categoria_nombre },
+  ...(f.imagen !== undefined && { imagen: f.imagen }),
+  created_at: f.created_at,
+  updated_at: f.updated_at,
+});
+
+// Todos los productos de un taller, activos e inactivos
+const listarDeProductor = async (productorId) => {
+  const { rows } = await query(
+    `SELECT ${CAMPOS_PROPIOS}, img.url AS imagen
+       FROM producto p
+       JOIN categoria cat ON cat.id = p.categoria_id
+       LEFT JOIN imagen_producto img ON img.producto_id = p.id AND img.es_principal
+      WHERE p.productor_id = $1
+      ORDER BY p.created_at DESC, p.id DESC`,
+    [productorId]
+  );
+  return rows.map(aProductoPropio);
+};
+
+const buscarDeProductor = async (id, productorId) => {
+  const { rows } = await query(
+    `SELECT ${CAMPOS_PROPIOS}
+       FROM producto p
+       JOIN categoria cat ON cat.id = p.categoria_id
+      WHERE p.id = $1 AND p.productor_id = $2`,
+    [id, productorId]
+  );
+  return rows[0] ? aProductoPropio(rows[0]) : null;
+};
+
+// Slugs que ya existen con esa base: "tapete" y "tapete-2", "tapete-3"...
+const slugsSimilares = async (base, excluirId) => {
+  const { rows } = await query(
+    `SELECT slug FROM producto
+      WHERE (slug = $1 OR slug ~ ('^' || $1 || '-[0-9]+$'))
+        AND ($2::bigint IS NULL OR id <> $2)`,
+    [base, excluirId || null]
+  );
+  return rows.map((r) => r.slug);
+};
+
+const COLUMNAS_EDITABLES = [
+  "categoria_id", "nombre", "slug", "descripcion", "modo_venta", "precio", "stock",
+  "material", "tecnica", "peso_g", "alto_cm", "ancho_cm", "largo_cm", "activo",
+];
+
+const crear = async (productorId, d) => {
+  const columnas = COLUMNAS_EDITABLES.filter((c) => d[c] !== undefined);
+  const marcas = columnas.map((_, i) => `$${i + 2}`);
+  const { rows } = await query(
+    `INSERT INTO producto (productor_id, ${columnas.join(", ")})
+     VALUES ($1, ${marcas.join(", ")})
+     RETURNING id`,
+    [productorId, ...columnas.map((c) => d[c])]
+  );
+  return rows[0].id;
+};
+
+const actualizar = async (id, cambios) => {
+  const columnas = COLUMNAS_EDITABLES.filter((c) => cambios[c] !== undefined);
+  if (!columnas.length) return;
+  const sets = columnas.map((c, i) => `${c} = $${i + 2}`);
+  await query(
+    `UPDATE producto SET ${sets.join(", ")}, updated_at = NOW() WHERE id = $1`,
+    [id, ...columnas.map((c) => cambios[c])]
+  );
+};
+
+module.exports = { listar, buscarPorSlug, listarDeProductor, buscarDeProductor, slugsSimilares, crear, actualizar };

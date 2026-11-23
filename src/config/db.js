@@ -24,4 +24,20 @@ pool.on("error", (err) => {
 // query(texto, valores): siempre con parámetros $1, $2... para evitar inyección SQL.
 const query = (texto, valores) => pool.query(texto, valores);
 
-module.exports = { pool, query };
+// Ejecuta fn(cliente) dentro de BEGIN/COMMIT; si fn lanza un error hace ROLLBACK.
+const transaccion = async (fn) => {
+  const cliente = await pool.connect();
+  try {
+    await cliente.query("BEGIN");
+    const resultado = await fn(cliente);
+    await cliente.query("COMMIT");
+    return resultado;
+  } catch (err) {
+    await cliente.query("ROLLBACK");
+    throw err;
+  } finally {
+    cliente.release();
+  }
+};
+
+module.exports = { pool, query, transaccion };

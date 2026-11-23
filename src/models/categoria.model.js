@@ -27,4 +27,9 @@ const buscarPorSlug = async (slug) => {
   return rows[0] || null;
 };
 
-module.exports = { listar, buscarPorSlug };
+const buscarPorId = async (id) => {
+  const { rows } = await query("SELECT id, nombre, slug, descripcion FROM categoria WHERE id = $1", [id]);
+  return rows[0] || null;
+};
+
+module.exports = { listar, buscarPorSlug, buscarPorId };
