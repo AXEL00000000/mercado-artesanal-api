@@ -127,12 +127,15 @@ const obtenerMio = async (usuario, idTexto) => {
 
 const urlDeRegreso = (pedidoId, resultado) => `${process.env.FRONT_URL}/pedidos/${pedidoId}?pago=${resultado}`;
 
-const crearPago = async (usuario, idTexto) => {
-  const pedido = await obtenerMio(usuario, idTexto);
-  if (pedido.estado !== "pendiente_pago") {
-    throw new HttpError(409, `El pedido ya no se puede pagar; está ${pedido.estado}`);
-  }
+const VIGENCIA_ORDEN_MS = 24 * 60 * 60 * 1000;
+const ESTADOS_EN_PROCESO = ["processing", "action_required"];
 
+const errorMp = (accion, err) => {
+  console.error(`Error al ${accion} en Mercado Pago:`, err.status, err.message || err.error, JSON.stringify(err.errors || err.causes || ""));
+  return new HttpError(502, "No se pudo iniciar el pago con Mercado Pago, intenta más tarde");
+};
+
+const crearOrdenMp = async (pedido) => {
   const items = pedido.productos.map((p) => ({
     title: p.nombre_producto,
     quantity: p.cantidad,
@@ -151,57 +154,112 @@ const crearPago = async (usuario, idTexto) => {
   };
   if (process.env.FRONT_URL && process.env.FRONT_URL.startsWith("https://")) online.auto_return = "approved";
 
-  let orden;
   try {
-    orden = await mercadopago.crearOrden({
+    return await mercadopago.crearOrden({
       type: "online",
       processing_mode: "manual",
       total_amount: pedido.total.toFixed(2),
       external_reference: String(pedido.id),
       description: `Pedido ${pedido.id} · ${pedido.productor.nombre_taller}`,
+      expiration_time: "P1D",
       items,
       config: { online },
     });
   } catch (err) {
-    console.error("Error al crear la order en Mercado Pago:", err.status, err.message || err.error, JSON.stringify(err.errors || err.causes || ""));
-    throw new HttpError(502, "No se pudo iniciar el pago con Mercado Pago, intenta más tarde");
+    throw errorMp("crear la order", err);
   }
+};
 
-  const pago = await Pago.crear({ pedidoId: pedido.id, mpOrderId: orden.id, monto: pedido.total, comision: COMISION_PLATAFORMA });
-  return { pago_id: pago.id, pedido_id: pedido.id, mp_order_id: orden.id, estado: pago.estado, checkout_url: orden.checkout_url };
+const respuestaPago = (pago, orden, reutilizado) => ({
+  pago_id: pago.id,
+  pedido_id: pago.pedido_id,
+  mp_order_id: orden.id,
+  estado: pago.estado,
+  checkout_url: orden.checkout_url,
+  reutilizado,
+});
+
+// Reutiliza la order pendiente si sigue pagable; si no, la cierra y crea otra.
+// El pedido queda bloqueado para que dos peticiones a la vez no creen dos orders.
+const crearPago = async (usuario, idTexto) => {
+  const { id } = await obtenerMio(usuario, idTexto);
+
+  const resultado = await transaccion(async (cliente) => {
+    const bloqueado = await Pedido.bloquear(cliente, id);
+    if (bloqueado.estado !== "pendiente_pago") {
+      return { error: new HttpError(409, `El pedido ya no se puede pagar; está ${bloqueado.estado}`) };
+    }
+
+    const pendiente = await Pago.bloquearPendiente(cliente, id);
+    if (pendiente) {
+      let orden;
+      try {
+        orden = await mercadopago.obtenerOrden(pendiente.mp_preference_id);
+      } catch (err) {
+        throw errorMp("consultar la order", err);
+      }
+
+      const edad = Date.now() - new Date(orden.created_date || pendiente.created_at).getTime();
+      if (orden.status === "created" && edad < VIGENCIA_ORDEN_MS) return respuestaPago(pendiente, orden, true);
+      if (ESTADOS_EN_PROCESO.includes(orden.status)) {
+        return { error: new HttpError(409, "Ya hay un pago en proceso para este pedido; espera la confirmación de Mercado Pago") };
+      }
+      if (orden.status === "created") {
+        try {
+          orden = await mercadopago.cancelarOrden(orden.id);
+        } catch (err) {
+          throw errorMp("cancelar la order vencida", err);
+        }
+      }
+
+      const aplicado = await aplicarOrdenEn(cliente, orden);
+      if (aplicado.estado === "aprobado") {
+        return { error: new HttpError(409, "El pedido ya fue pagado") };
+      }
+    }
+
+    const pedido = await Pedido.buscarPorId(id);
+    const orden = await crearOrdenMp(pedido);
+    const pago = await Pago.crear(cliente, { pedidoId: id, mpOrderId: orden.id, monto: pedido.total, comision: COMISION_PLATAFORMA });
+    return respuestaPago(pago, orden, false);
+  });
+
+  if (resultado.error) throw resultado.error;
+  return resultado;
 };
 
 // Aplica a la base el estado de una order de Mercado Pago. Es idempotente.
-const aplicarOrden = (orden) =>
-  transaccion(async (cliente) => {
-    const pago = await Pago.bloquearPorOrden(cliente, orden.id);
-    if (!pago) return { aplicado: false, motivo: "La order no corresponde a ningún pago" };
-    if (pago.estado === "aprobado" || pago.estado === "reembolsado") {
-      if (pago.estado === "aprobado" && ESTADOS_MP[orden.status] === "reembolsado") {
-        await Pago.actualizar(cliente, pago.id, { estado: "reembolsado" });
-        return { aplicado: true, estado: "reembolsado" };
-      }
-      return { aplicado: false, motivo: `El pago ya estaba ${pago.estado}` };
+const aplicarOrdenEn = async (cliente, orden) => {
+  const pago = await Pago.bloquearPorOrden(cliente, orden.id);
+  if (!pago) return { aplicado: false, motivo: "La order no corresponde a ningún pago" };
+  if (pago.estado === "aprobado" || pago.estado === "reembolsado") {
+    if (pago.estado === "aprobado" && ESTADOS_MP[orden.status] === "reembolsado") {
+      await Pago.actualizar(cliente, pago.id, { estado: "reembolsado" });
+      return { aplicado: true, estado: "reembolsado" };
     }
+    return { aplicado: false, motivo: `El pago ya estaba ${pago.estado}` };
+  }
 
-    const estado = ESTADOS_MP[orden.status] || "pendiente";
-    const pagoMp = orden.transactions && orden.transactions.payments && orden.transactions.payments[0];
-    await Pago.actualizar(cliente, pago.id, { estado, mpPaymentId: pagoMp && pagoMp.id });
+  const estado = ESTADOS_MP[orden.status] || "pendiente";
+  const pagoMp = orden.transactions && orden.transactions.payments && orden.transactions.payments[0];
+  await Pago.actualizar(cliente, pago.id, { estado, mpPaymentId: pagoMp && pagoMp.id });
 
-    if (estado === "aprobado") {
-      const pedido = await Pedido.bloquear(cliente, pago.pedido_id);
-      if (pedido.estado === "pendiente_pago") {
-        const movidos = await Pedido.moverStock(cliente, pedido.id, -1);
-        movidos
-          .filter((m) => m.stock === 0)
-          .forEach((m) => console.warn(`Producto ${m.id} quedó sin stock con el pedido ${pedido.id}`));
-        await Pedido.cambiarEstado(cliente, pedido.id, "pagado");
-      } else {
-        console.warn(`Pago aprobado para el pedido ${pedido.id} que está ${pedido.estado}`);
-      }
+  if (estado === "aprobado") {
+    const pedido = await Pedido.bloquear(cliente, pago.pedido_id);
+    if (pedido.estado === "pendiente_pago") {
+      const movidos = await Pedido.moverStock(cliente, pedido.id, -1);
+      movidos
+        .filter((m) => m.stock === 0)
+        .forEach((m) => console.warn(`Producto ${m.id} quedó sin stock con el pedido ${pedido.id}`));
+      await Pedido.cambiarEstado(cliente, pedido.id, "pagado");
+    } else {
+      console.warn(`Pago aprobado para el pedido ${pedido.id} que está ${pedido.estado}`);
     }
-    return { aplicado: true, estado };
-  });
+  }
+  return { aplicado: true, estado };
+};
+
+const aplicarOrden = (orden) => transaccion((cliente) => aplicarOrdenEn(cliente, orden));
 
 const procesarWebhook = async ({ query, body, headers }) => {
   const tipo = (body && body.type) || query.type || query.topic;

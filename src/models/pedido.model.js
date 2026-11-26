@@ -3,7 +3,7 @@ const { query } = require("../config/db");
 // Bloquea las filas de los productos hasta terminar la transacción
 const bloquearProductos = async (cliente, ids) => {
   const { rows } = await cliente.query(
-    `SELECT id, nombre, precio, stock, activo, modo_venta
+    `SELECT id, nombre, precio, stock, activo AND NOT eliminado AS activo, modo_venta
        FROM producto
       WHERE id = ANY($1::bigint[])
       ORDER BY id

@@ -62,7 +62,9 @@ const router = Router();
  *   patch:
  *     tags: [Administración]
  *     summary: Aprueba o rechaza un taller
- *     description: Solo los talleres aprobados aparecen en el catálogo público.
+ *     description: >
+ *       Solo los talleres aprobados aparecen en el catálogo público. Al rechazar es obligatorio el motivo,
+ *       que el artesano ve en GET /api/mi-taller; al aprobar, el motivo anterior se borra.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -75,18 +77,30 @@ const router = Router();
  *             type: object
  *             required: [estado]
  *             properties:
- *               estado: { type: string, enum: [aprobado, rechazado], example: aprobado }
+ *               estado: { type: string, enum: [aprobado, rechazado], example: rechazado }
+ *               motivo: { type: string, maxLength: 500, description: Obligatorio si estado es rechazado, example: Las fotos del taller no muestran piezas propias. }
  *     responses:
  *       200:
- *         description: Taller con su nuevo estado
+ *         description: Taller con su nuevo estado y motivo_rechazo
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/MiTaller' }
+ *             example:
+ *               id: 4
+ *               nombre_taller: Taller de Prueba
+ *               estado_verificacion: rechazado
+ *               motivo_rechazo: Las fotos del taller no muestran piezas propias.
  *       400:
- *         description: El estado o el id no son válidos
+ *         description: El estado, el motivo o el id no son válidos
  *         content:
  *           application/json:
- *             example: { error: "estado debe ser aprobado o rechazado" }
+ *             examples:
+ *               estado:
+ *                 value: { error: "estado debe ser aprobado o rechazado" }
+ *               sinMotivo:
+ *                 value: { error: "motivo es obligatorio al rechazar un taller" }
+ *               motivoLargo:
+ *                 value: { error: "motivo no puede pasar de 500 caracteres" }
  *       401:
  *         description: Falta el token o no es válido
  *         content:

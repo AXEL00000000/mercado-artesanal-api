@@ -19,7 +19,7 @@ const CONSULTA_BASE = `
     FROM productor pr
     JOIN usuario u ON u.id = pr.usuario_id
     JOIN comunidad c ON c.id = pr.comunidad_id
-    LEFT JOIN producto p ON p.productor_id = pr.id AND p.activo
+    LEFT JOIN producto p ON p.productor_id = pr.id AND p.activo AND NOT p.eliminado
    WHERE pr.estado_verificacion = 'aprobado'`;
 
 // Talleres aprobados; si llega comunidad, filtra por ella
@@ -46,7 +46,7 @@ const buscarPorId = async (id) => {
 
 const CAMPOS_TALLER = `
   pr.id, pr.usuario_id, pr.nombre_taller, pr.biografia, pr.foto_url, pr.whatsapp,
-  pr.direccion_taller, pr.cp_taller, pr.estado_verificacion, pr.created_at,
+  pr.direccion_taller, pr.cp_taller, pr.estado_verificacion, pr.motivo_rechazo, pr.created_at,
   c.id AS comunidad_id, c.nombre AS comunidad_nombre, c.municipio, c.region`;
 
 const aTaller = (f) => ({
@@ -59,6 +59,7 @@ const aTaller = (f) => ({
   direccion_taller: f.direccion_taller,
   cp_taller: f.cp_taller,
   estado_verificacion: f.estado_verificacion,
+  motivo_rechazo: f.motivo_rechazo,
   comunidad: { id: f.comunidad_id, nombre: f.comunidad_nombre, municipio: f.municipio, region: f.region },
   created_at: f.created_at,
 });
@@ -99,7 +100,10 @@ const crear = async (usuarioId, d) => {
   return rows[0].id;
 };
 
-const COLUMNAS_EDITABLES = ["comunidad_id", "nombre_taller", "biografia", "foto_url", "whatsapp", "direccion_taller", "cp_taller"];
+const COLUMNAS_EDITABLES = [
+  "comunidad_id", "nombre_taller", "biografia", "foto_url", "whatsapp", "direccion_taller", "cp_taller",
+  "estado_verificacion", "motivo_rechazo",
+];
 
 const actualizar = async (id, cambios) => {
   const columnas = COLUMNAS_EDITABLES.filter((c) => cambios[c] !== undefined);
@@ -113,7 +117,7 @@ const listarParaAdmin = async (estado) => {
   const { rows } = await query(
     `SELECT ${CAMPOS_TALLER},
             u.nombre AS artesano, u.email, u.telefono,
-            (SELECT COUNT(*)::int FROM producto p WHERE p.productor_id = pr.id) AS total_productos
+            (SELECT COUNT(*)::int FROM producto p WHERE p.productor_id = pr.id AND NOT p.eliminado) AS total_productos
        FROM productor pr
        JOIN comunidad c ON c.id = pr.comunidad_id
        JOIN usuario u ON u.id = pr.usuario_id
@@ -128,8 +132,8 @@ const listarParaAdmin = async (estado) => {
   }));
 };
 
-const cambiarEstado = (id, estado) =>
-  query("UPDATE productor SET estado_verificacion = $2 WHERE id = $1", [id, estado]);
+const cambiarEstado = (id, estado, motivo) =>
+  query("UPDATE productor SET estado_verificacion = $2, motivo_rechazo = $3 WHERE id = $1", [id, estado, motivo]);
 
 module.exports = {
   listar, buscarPorId, buscarPorUsuario, buscarTallerPorId, crear, actualizar, listarParaAdmin, cambiarEstado,

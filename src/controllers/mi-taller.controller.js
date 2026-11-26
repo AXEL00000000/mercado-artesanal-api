@@ -33,6 +33,11 @@ const cambiarActivoProducto = async (req, res) => {
   res.json(await miProductoService.cambiarActivo(req.productor, req.params.id, req.body || {}));
 };
 
+const eliminarProducto = async (req, res) => {
+  await miProductoService.eliminar(req.productor, req.params.id);
+  res.status(204).end();
+};
+
 const agregarImagen = async (req, res) => {
   res.status(201).json(await miProductoService.agregarImagen(req.productor, req.params.id, req.file));
 };
@@ -48,6 +53,6 @@ const marcarImagenPrincipal = async (req, res) => {
 
 module.exports = {
   crearTaller, obtenerTaller, actualizarTaller,
-  listarProductos, obtenerProducto, crearProducto, actualizarProducto, cambiarActivoProducto,
+  listarProductos, obtenerProducto, crearProducto, actualizarProducto, cambiarActivoProducto, eliminarProducto,
   agregarImagen, eliminarImagen, marcarImagenPrincipal,
 };

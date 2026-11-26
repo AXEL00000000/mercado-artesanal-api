@@ -26,6 +26,7 @@ const router = Router();
  *         direccion_taller: { type: string, example: Calle Benito Juárez 5, San Bartolo Coyotepec }
  *         cp_taller: { type: string, example: "71256" }
  *         estado_verificacion: { type: string, enum: [pendiente, aprobado, rechazado], example: aprobado }
+ *         motivo_rechazo: { type: string, nullable: true, description: Solo cuando el taller está rechazado, example: null }
  *         comunidad:
  *           type: object
  *           properties:
@@ -158,6 +159,11 @@ const router = Router();
  *   put:
  *     tags: [Mi taller]
  *     summary: Edita el taller; solo se cambian los campos enviados
+ *     description: >
+ *       Un taller aprobado vuelve a 'pendiente' si cambia nombre_taller o comunidad_id a un valor distinto.
+ *       Un taller rechazado vuelve a 'pendiente' con cualquier edición y se borra su motivo_rechazo.
+ *       Biografía, foto, WhatsApp, dirección y CP se editan sin cambiar el estado.
+ *       Mientras está pendiente, sus productos no salen en el catálogo.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -168,10 +174,15 @@ const router = Router();
  *           example: { biografia: "Alfareras de barro negro desde 1950.", whatsapp: "529511000099" }
  *     responses:
  *       200:
- *         description: Taller actualizado
+ *         description: Taller actualizado; volvio_a_revision indica si pasó a 'pendiente' con este cambio
  *         content:
  *           application/json:
- *             schema: { $ref: '#/components/schemas/MiTaller' }
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/MiTaller'
+ *                 - type: object
+ *                   properties:
+ *                     volvio_a_revision: { type: boolean, example: false }
  *       400:
  *         description: Datos inválidos o cuerpo vacío
  *         content:
@@ -325,7 +336,7 @@ const router = Router();
  *             example: { error: "Producto no encontrado en tu taller" }
  *   patch:
  *     tags: [Mi taller]
- *     summary: Activa o desactiva un producto (los productos no se borran)
+ *     summary: Activa o desactiva un producto
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -360,6 +371,38 @@ const router = Router();
  *             example: { error: "Primero debes registrar tu taller" }
  *       404:
  *         description: No existe o es de otro taller
+ *         content:
+ *           application/json:
+ *             example: { error: "Producto no encontrado en tu taller" }
+ *   delete:
+ *     tags: [Mi taller]
+ *     summary: Elimina un producto (borrado lógico)
+ *     description: >
+ *       Marca el producto como eliminado y desactivado; no se borran sus datos ni sus imágenes.
+ *       Deja de aparecer en el catálogo, en el perfil del taller, en los conteos y en "mis productos",
+ *       y ya no se puede editar, activar, comprar ni cotizar. Los pedidos que ya lo incluían no cambian.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       204:
+ *         description: Producto eliminado
+ *       400:
+ *         description: El id no es válido
+ *         content:
+ *           application/json:
+ *             example: { error: "El id debe ser un número entero positivo" }
+ *       401:
+ *         description: Falta el token o no es válido
+ *         content:
+ *           application/json:
+ *             example: { error: "Falta el token de acceso" }
+ *       403:
+ *         description: El usuario no tiene taller
+ *         content:
+ *           application/json:
+ *             example: { error: "Primero debes registrar tu taller" }
+ *       404:
+ *         description: No existe, es de otro taller o ya estaba eliminado
  *         content:
  *           application/json:
  *             example: { error: "Producto no encontrado en tu taller" }
@@ -501,6 +544,7 @@ router.post("/productos", requiereTaller, c.crearProducto);
 router.get("/productos/:id", requiereTaller, c.obtenerProducto);
 router.put("/productos/:id", requiereTaller, c.actualizarProducto);
 router.patch("/productos/:id", requiereTaller, c.cambiarActivoProducto);
+router.delete("/productos/:id", requiereTaller, c.eliminarProducto);
 
 router.post("/productos/:id/imagenes", requiereTaller, subirImagen, c.agregarImagen);
 router.delete("/productos/:id/imagenes/:imagenId", requiereTaller, c.eliminarImagen);

@@ -62,8 +62,21 @@ const crear = async (usuarioId, datos) => {
 const actualizar = async (productor, datos) => {
   const limpio = await validarTaller(datos, true);
   if (!Object.keys(limpio).length) throw new HttpError(400, "No enviaste ningún campo para actualizar");
+
+  const cambiaIdentidad =
+    (limpio.nombre_taller !== undefined && limpio.nombre_taller !== productor.nombre_taller) ||
+    (limpio.comunidad_id !== undefined && limpio.comunidad_id !== productor.comunidad.id);
+  const volvioARevision =
+    productor.estado_verificacion === "rechazado" ||
+    (productor.estado_verificacion === "aprobado" && cambiaIdentidad);
+  if (volvioARevision) {
+    limpio.estado_verificacion = "pendiente";
+    limpio.motivo_rechazo = null;
+  }
+
   await Productor.actualizar(productor.id, limpio);
-  return Productor.buscarPorUsuario(productor.usuario_id);
+  const taller = await Productor.buscarPorUsuario(productor.usuario_id);
+  return { ...taller, volvio_a_revision: volvioARevision };
 };
 
 module.exports = { crear, actualizar };

@@ -21,7 +21,7 @@ const aTarjeta = (fila) => ({
 
 // Productos activos de talleres aprobados, con filtros y paginación
 const listar = async ({ categoria, comunidad, region, productor, modo, q, orden, limite, offset }) => {
-  const condiciones = ["p.activo", "pr.estado_verificacion = 'aprobado'"];
+  const condiciones = ["p.activo", "NOT p.eliminado", "pr.estado_verificacion = 'aprobado'"];
   const valores = [];
   const agregar = (sql, valor) => {
     valores.push(valor);
@@ -71,7 +71,7 @@ const buscarPorSlug = async (slug) => {
        JOIN usuario u ON u.id = pr.usuario_id
        JOIN comunidad c ON c.id = pr.comunidad_id
        JOIN categoria cat ON cat.id = p.categoria_id
-      WHERE p.slug = $1 AND p.activo AND pr.estado_verificacion = 'aprobado'`,
+      WHERE p.slug = $1 AND p.activo AND NOT p.eliminado AND pr.estado_verificacion = 'aprobado'`,
     [slug]
   );
   const f = rows[0];
@@ -136,14 +136,14 @@ const aProductoPropio = (f) => ({
   updated_at: f.updated_at,
 });
 
-// Todos los productos de un taller, activos e inactivos
+// Productos no eliminados de un taller, activos e inactivos
 const listarDeProductor = async (productorId) => {
   const { rows } = await query(
     `SELECT ${CAMPOS_PROPIOS}, img.url AS imagen
        FROM producto p
        JOIN categoria cat ON cat.id = p.categoria_id
        LEFT JOIN imagen_producto img ON img.producto_id = p.id AND img.es_principal
-      WHERE p.productor_id = $1
+      WHERE p.productor_id = $1 AND NOT p.eliminado
       ORDER BY p.created_at DESC, p.id DESC`,
     [productorId]
   );
@@ -155,7 +155,7 @@ const buscarDeProductor = async (id, productorId) => {
     `SELECT ${CAMPOS_PROPIOS}
        FROM producto p
        JOIN categoria cat ON cat.id = p.categoria_id
-      WHERE p.id = $1 AND p.productor_id = $2`,
+      WHERE p.id = $1 AND p.productor_id = $2 AND NOT p.eliminado`,
     [id, productorId]
   );
   return rows[0] ? aProductoPropio(rows[0]) : null;
@@ -207,10 +207,22 @@ const buscarPublicosPorIds = async (ids) => {
             pr.id AS productor_id, pr.nombre_taller, pr.whatsapp
        FROM producto p
        JOIN productor pr ON pr.id = p.productor_id
-      WHERE p.id = ANY($1::bigint[]) AND p.activo AND pr.estado_verificacion = 'aprobado'`,
+      WHERE p.id = ANY($1::bigint[]) AND p.activo AND NOT p.eliminado AND pr.estado_verificacion = 'aprobado'`,
     [ids]
   );
   return rows;
 };
 
-module.exports = { listar, buscarPorSlug, buscarPublicosPorIds, listarDeProductor, buscarDeProductor, slugsSimilares, crear, actualizar };
+// Borrado lógico; devuelve false si no existía o ya estaba eliminado
+const eliminar = async (id, productorId) => {
+  const { rowCount } = await query(
+    `UPDATE producto SET eliminado = TRUE, activo = FALSE, updated_at = NOW()
+      WHERE id = $1 AND productor_id = $2 AND NOT eliminado`,
+    [id, productorId]
+  );
+  return rowCount > 0;
+};
+
+module.exports = {
+  listar, buscarPorSlug, buscarPublicosPorIds, listarDeProductor, buscarDeProductor, slugsSimilares, crear, actualizar, eliminar,
+};

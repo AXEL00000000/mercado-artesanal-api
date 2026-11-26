@@ -123,6 +123,12 @@ const cambiarActivo = async (productor, idTexto, { activo } = {}) => {
   return obtener(productor, actual.id);
 };
 
+const eliminar = async (productor, idTexto) => {
+  if (!(await Producto.eliminar(validarId(idTexto), productor.id))) {
+    throw new HttpError(404, "Producto no encontrado en tu taller");
+  }
+};
+
 const agregarImagen = async (productor, idTexto, archivo) => {
   const producto = await buscarPropio(productor, idTexto);
   if (!archivo) throw new HttpError(400, "Envía la imagen en el campo 'imagen'");
@@ -162,6 +168,6 @@ const marcarPrincipal = async (productor, idTexto, imagenIdTexto) => {
 };
 
 module.exports = {
-  listar, obtener, crear, actualizar, cambiarActivo,
+  listar, obtener, crear, actualizar, cambiarActivo, eliminar,
   agregarImagen, eliminarImagen, marcarPrincipal,
 };

@@ -191,17 +191,20 @@ const router = Router();
  * /api/pedidos/{id}/pago:
  *   post:
  *     tags: [Pedidos]
- *     summary: Crea el cobro en Mercado Pago (Checkout Pro vía Orders) y devuelve la URL de pago
+ *     summary: Devuelve la URL de pago de Mercado Pago (Checkout Pro vía Orders), sin crear cobros duplicados
  *     description: >
- *       Registra un PAGO en 'pendiente' con el id de la order en mp_preference_id. El comprador se redirige a
- *       checkout_url y al terminar regresa a FRONT_URL/pedidos/{id}?pago=aprobado|rechazado|pendiente.
+ *       Si el pedido ya tiene un PAGO pendiente cuya order sigue abierta y tiene menos de 24 horas, devuelve esa
+ *       misma checkout_url con reutilizado true. Si la order venció, se cancela en Mercado Pago y se crea otra.
+ *       Si la order ya se pagó, se aplica el pago y responde 409. Una order nueva se registra como PAGO 'pendiente'
+ *       con su id en mp_preference_id y vence en 1 día. El comprador se redirige a checkout_url y al terminar regresa
+ *       a FRONT_URL/pedidos/{id}?pago=aprobado|rechazado|pendiente.
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: integer }, example: 12 }
  *     responses:
  *       201:
- *         description: Order creada
+ *         description: Order nueva o reutilizada
  *         content:
  *           application/json:
  *             example:
@@ -210,6 +213,7 @@ const router = Router();
  *               mp_order_id: ORDTST01KS5AJ6HTK2HRQ3XJ3C2JCKP9
  *               estado: pendiente
  *               checkout_url: https://www.mercadopago.com.mx/checkout/v1/redirect?order_id=ORDTST01KS5AJ6HTK2HRQ3XJ3C2JCKP9
+ *               reutilizado: false
  *       401:
  *         description: Falta el token o no es válido
  *         content:
@@ -221,12 +225,18 @@ const router = Router();
  *           application/json:
  *             example: { error: "Pedido no encontrado" }
  *       409:
- *         description: El pedido ya no está pendiente de pago
+ *         description: El pedido ya no se puede pagar, ya se pagó o tiene un pago en proceso
  *         content:
  *           application/json:
- *             example: { error: "El pedido ya no se puede pagar; está pagado" }
+ *             examples:
+ *               noPendiente:
+ *                 value: { error: "El pedido ya no se puede pagar; está cancelado" }
+ *               yaPagado:
+ *                 value: { error: "El pedido ya fue pagado" }
+ *               enProceso:
+ *                 value: { error: "Ya hay un pago en proceso para este pedido; espera la confirmación de Mercado Pago" }
  *       502:
- *         description: Mercado Pago no aceptó la order
+ *         description: Mercado Pago no respondió al crear, consultar o cancelar la order
  *         content:
  *           application/json:
  *             example: { error: "No se pudo iniciar el pago con Mercado Pago, intenta más tarde" }

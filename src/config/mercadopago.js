@@ -17,6 +17,9 @@ const crearOrden = (body) =>
 
 const obtenerOrden = (id) => obtenerCliente().get({ id });
 
+const cancelarOrden = (id) =>
+  obtenerCliente().cancel({ id, requestOptions: { idempotencyKey: crypto.randomUUID() } });
+
 // Valida el header x-signature ("ts=...,v1=...") con MP_WEBHOOK_SECRET
 const firmaValida = ({ firma, requestId, dataId }) => {
   const partes = Object.fromEntries((firma || "").split(",").map((p) => p.trim().split("=")));
@@ -26,4 +29,4 @@ const firmaValida = ({ firma, requestId, dataId }) => {
   return esperado.length === partes.v1.length && crypto.timingSafeEqual(Buffer.from(esperado), Buffer.from(partes.v1));
 };
 
-module.exports = { crearOrden, obtenerOrden, firmaValida };
+module.exports = { crearOrden, obtenerOrden, cancelarOrden, firmaValida };

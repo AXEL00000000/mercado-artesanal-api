@@ -7,7 +7,7 @@ const listar = async () => {
     `SELECT c.id, c.nombre, c.slug, c.descripcion,
             COUNT(p.id)::int AS total_productos
        FROM categoria c
-       LEFT JOIN producto p ON p.categoria_id = c.id AND p.activo
+       LEFT JOIN producto p ON p.categoria_id = c.id AND p.activo AND NOT p.eliminado
       GROUP BY c.id
       ORDER BY c.nombre`
   );
@@ -19,7 +19,7 @@ const buscarPorSlug = async (slug) => {
     `SELECT c.id, c.nombre, c.slug, c.descripcion,
             COUNT(p.id)::int AS total_productos
        FROM categoria c
-       LEFT JOIN producto p ON p.categoria_id = c.id AND p.activo
+       LEFT JOIN producto p ON p.categoria_id = c.id AND p.activo AND NOT p.eliminado
       WHERE c.slug = $1
       GROUP BY c.id`,
     [slug]
