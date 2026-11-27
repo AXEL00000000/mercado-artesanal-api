@@ -176,7 +176,15 @@ const cotizar = async ({ productor_id, cp_destino, productos } = {}) => {
   return { opcion_entrega_id: opcion.id, opciones: opciones.sort((a, b) => a.costo - b.costo) };
 };
 
+const buscarCodigoPostal = async (cp) => {
+  if (!CP_VALIDO.test(cp)) throw new HttpError(400, "El código postal debe tener 5 dígitos");
+  const lugar = await envia.consultarCp(cp, "No se pudo consultar el código postal en Envia, intenta más tarde");
+  if (!lugar) throw new HttpError(404, "Código postal no encontrado");
+  const { codigo_estado, ...datos } = lugar;
+  return datos;
+};
+
 module.exports = {
-  listarMias, crear, actualizar, eliminar, listarPublicas, cotizar,
+  listarMias, crear, actualizar, eliminar, listarPublicas, cotizar, buscarCodigoPostal,
   validarCarrito, cargarCarrito, cotizarEnvio, CP_VALIDO,
 };

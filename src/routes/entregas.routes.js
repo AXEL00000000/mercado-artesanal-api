@@ -244,6 +244,44 @@ const router = Router();
  *         content:
  *           application/json:
  *             example: { error: "No se pudo cotizar el envío con Envia, intenta más tarde" }
+ *
+ * /api/envios/codigo-postal/{cp}:
+ *   get:
+ *     tags: [Entregas]
+ *     summary: Estado, ciudad, municipio y colonias de un código postal de México (vía Envia)
+ *     parameters:
+ *       - { in: path, name: cp, required: true, schema: { type: string, pattern: '^[0-9]{5}$' }, example: "68000" }
+ *     responses:
+ *       200:
+ *         description: Datos del código postal
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 cp: { type: string, example: "71256" }
+ *                 estado: { type: string, example: Oaxaca }
+ *                 ciudad: { type: string, example: San Antonio de la Cal }
+ *                 municipio: { type: string, example: San Antonio de la Cal }
+ *                 colonias:
+ *                   type: array
+ *                   items: { type: string }
+ *                   example: [1.a, 1a Sección la Calera, El Portillo]
+ *       400:
+ *         description: El código postal no tiene 5 dígitos
+ *         content:
+ *           application/json:
+ *             example: { error: "El código postal debe tener 5 dígitos" }
+ *       404:
+ *         description: Envia no conoce ese código postal
+ *         content:
+ *           application/json:
+ *             example: { error: "Código postal no encontrado" }
+ *       502:
+ *         description: Envia no respondió
+ *         content:
+ *           application/json:
+ *             example: { error: "No se pudo consultar el código postal en Envia, intenta más tarde" }
  */
 router.get("/mi-taller/opciones-entrega", autenticar, requiereTaller, c.listarMias);
 router.post("/mi-taller/opciones-entrega", autenticar, requiereTaller, c.crear);
@@ -251,5 +289,6 @@ router.put("/mi-taller/opciones-entrega/:id", autenticar, requiereTaller, c.actu
 router.delete("/mi-taller/opciones-entrega/:id", autenticar, requiereTaller, c.eliminar);
 router.get("/productores/:id/opciones-entrega", c.listarPublicas);
 router.post("/envios/cotizar", c.cotizar);
+router.get("/envios/codigo-postal/:cp", c.buscarCodigoPostal);
 
 module.exports = router;

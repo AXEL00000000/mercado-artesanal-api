@@ -8,19 +8,38 @@ const TIEMPO_MAXIMO_MS = 15000;
 
 const errorEnvia = () => new HttpError(502, "No se pudo cotizar el envío con Envia, intenta más tarde");
 
-// Ciudad y estado (código de 2 letras) de un CP de México; null si no existe
-const buscarCp = async (cp) => {
+// Datos de un CP de México según Envia; null si no existe.
+// Envia responde un arreglo vacío cuando el CP no existe.
+const consultarCp = async (cp, mensajeError) => {
   let datos;
   try {
-    const res = await fetch(URL_CP + cp, { signal: AbortSignal.timeout(TIEMPO_MAXIMO_MS) });
+    const res = await fetch(URL_CP + cp, {
+      headers: { Authorization: `Bearer ${process.env.ENVIA_API_KEY}` },
+      signal: AbortSignal.timeout(TIEMPO_MAXIMO_MS),
+    });
+    if (!res.ok) throw new Error(`status ${res.status}`);
     datos = await res.json();
+    if (!Array.isArray(datos)) throw new Error("respuesta inesperada");
   } catch (err) {
     console.error("Error al consultar CP en Envia:", err.message);
-    throw errorEnvia();
+    throw new HttpError(502, mensajeError);
   }
-  const lugar = Array.isArray(datos) && datos[0];
+  const lugar = datos[0];
   if (!lugar) return null;
-  return { ciudad: lugar.locality, estado: lugar.state.code["2digit"] };
+  return {
+    cp: lugar.zip_code,
+    estado: lugar.state.name,
+    codigo_estado: lugar.state.code["2digit"],
+    ciudad: lugar.locality,
+    municipio: (lugar.regions && lugar.regions.region_2) || lugar.locality,
+    colonias: lugar.suburbs || [],
+  };
+};
+
+// Ciudad y estado (código de 2 letras) de un CP de México; null si no existe
+const buscarCp = async (cp) => {
+  const lugar = await consultarCp(cp, errorEnvia().message);
+  return lugar && { ciudad: lugar.ciudad, estado: lugar.codigo_estado };
 };
 
 const cotizarConPaqueteria = async (carrier, cuerpo) => {
@@ -60,4 +79,4 @@ const cotizar = async ({ origen, destino, paquetes }) => {
   }));
 };
 
-module.exports = { buscarCp, cotizar };
+module.exports = { consultarCp, buscarCp, cotizar };
