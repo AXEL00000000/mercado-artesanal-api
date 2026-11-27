@@ -25,4 +25,8 @@ const cotizar = async (req, res) => {
   res.json(await entregaService.cotizar(req.body || {}));
 };
 
-module.exports = { listarMias, crear, actualizar, eliminar, listarPublicas, cotizar };
+const buscarCodigoPostal = async (req, res) => {
+  res.json(await entregaService.buscarCodigoPostal(req.params.cp));
+};
+
+module.exports = { listarMias, crear, actualizar, eliminar, listarPublicas, cotizar, buscarCodigoPostal };
